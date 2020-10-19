@@ -1,0 +1,24 @@
+---
+kind: Service
+apiVersion: v1
+metadata:
+  namespace: rabbitmq
+  name: rabbitmq-cluster
+  labels:
+    app: rabbitmq-cluster
+    type: LoadBalancer  
+spec:
+  clusterIP: None
+  # 由于使用DNS访问Pod需Pod和Headless service启动之后才能访问，publishNotReadyAddresses设置成true，防止readinessProbe在服务没启动时找不到DNS
+  publishNotReadyAddresses: true 
+  ports:
+   - name: http
+     protocol: TCP
+     port: 15672
+     targetPort: 15672
+   - name: amqp
+     protocol: TCP
+     port: 5672
+     targetPort: 5672
+  selector:
+    app: rabbitmq

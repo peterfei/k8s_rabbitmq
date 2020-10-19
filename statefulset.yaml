@@ -1,0 +1,89 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rabbitmq
+  namespace: rabbitmq
+spec:
+  serviceName: rabbitmq-cluster
+  replicas: 2
+  selector:
+    matchLabels:
+      app: rabbitmq
+  template:
+    metadata:
+      labels:
+        app: rabbitmq
+    spec:
+      serviceAccountName: rabbitmq
+      terminationGracePeriodSeconds: 10
+      containers:        
+      - name: rabbitmq
+        image: rabbitmq:3.7.4
+        volumeMounts:
+          - name: config-volume
+            mountPath: /etc/rabbitmq
+          - name: rabbitmq-data
+            mountPath: /var/lib/rabbitmq
+        ports:
+          - name: http
+            protocol: TCP
+            containerPort: 15672
+          - name: amqp
+            protocol: TCP
+            containerPort: 5672
+        livenessProbe:
+          exec:
+            command: ["rabbitmqctl", "status"]
+          initialDelaySeconds: 60
+          # See https://www.rabbitmq.com/monitoring.html for monitoring frequency recommendations.
+          periodSeconds: 60
+          timeoutSeconds: 15
+        readinessProbe:
+          exec:
+            command: ["rabbitmqctl", "status"]
+          initialDelaySeconds: 20
+          periodSeconds: 60
+          timeoutSeconds: 10
+        imagePullPolicy: Always
+        env:
+          - name: HOSTNAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: RABBITMQ_USE_LONGNAME
+            value: "true"
+          # See a note on cluster_formation.k8s.address_type in the config file section
+          - name: RABBITMQ_NODENAME
+            value: "rabbit@$(HOSTNAME).rabbitmq-cluster.$(NAMESPACE).svc.cluster.local"
+        #   若在ConfigMap中设置了service_name，则此处无需再次设置
+        #   - name: K8S_SERVICE_NAME
+        #     value: "rabbitmq-cluster"
+          - name: RABBITMQ_ERLANG_COOKIE
+            value: "mycookie" 
+      volumes:
+        - name: config-volume
+          configMap:
+            name: rabbitmq-config
+            items:
+            - key: rabbitmq.conf
+              path: rabbitmq.conf
+            - key: enabled_plugins
+              path: enabled_plugins
+  volumeClaimTemplates:
+  - metadata:
+      name: rabbitmq-data
+      labels:
+        name: rabbitmq-data
+      annotations:
+        volume.beta.kubernetes.io/storage-class: "fast"
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      resources:
+        requests:
+          storage: 2Gi
+
